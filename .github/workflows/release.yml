@@ -11,9 +11,10 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  PLAYNITE_VERSION: '10.56'
-  PLAYNITE_ARCHIVE_URL: https://github.com/JosefNemec/Playnite/releases/download/10.56/10.56.7z
-  PLAYNITE_ARCHIVE_SHA256: 402DC4A4B818B1EBBEE4F571F81585BB6BBF8E17F817C1012CDED0B3D1CC565F
+  PLAYNITE_VERSION: '10.1'
+  PLAYNITE_SDK_VERSION: '6.4.0'
+  PLAYNITE_ARCHIVE_URL: https://github.com/JosefNemec/Playnite/releases/download/10.1/Playnite101.zip
+  PLAYNITE_ARCHIVE_SHA256: 6377CBAB9A2160B3C4B342D7701B7422E1719B4E927025978F01F28948E1E2CA
 
 jobs:
   build:
@@ -64,12 +65,29 @@ jobs:
 
           "version=$Version" >> $env:GITHUB_OUTPUT
 
+      - name: Validate Playnite SDK compatibility
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          [xml]$Project = Get-Content -LiteralPath 'LunaBoxExporter.csproj'
+          $SdkReference = $Project.Project.ItemGroup.PackageReference |
+            Where-Object { $_.Include -eq 'PlayniteSDK' } |
+            Select-Object -First 1
+
+          if ($null -eq $SdkReference) {
+            throw 'PlayniteSDK package reference is missing.'
+          }
+
+          if ($SdkReference.Version -ne $env:PLAYNITE_SDK_VERSION) {
+            throw "PlayniteSDK version mismatch: expected $env:PLAYNITE_SDK_VERSION, found $($SdkReference.Version)"
+          }
+
       - name: Download Playnite Toolbox
         id: toolbox
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $Archive = Join-Path $env:RUNNER_TEMP "playnite-$env:PLAYNITE_VERSION.7z"
+          $Archive = Join-Path $env:RUNNER_TEMP "playnite-$env:PLAYNITE_VERSION.zip"
           $ExtractDirectory = Join-Path $env:RUNNER_TEMP "playnite-$env:PLAYNITE_VERSION"
           Invoke-WebRequest -Uri $env:PLAYNITE_ARCHIVE_URL -OutFile $Archive
 

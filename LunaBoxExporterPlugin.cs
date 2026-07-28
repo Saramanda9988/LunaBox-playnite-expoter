@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Microsoft.Win32;
 using Playnite.SDK;
 using Playnite.SDK.Data;
 using Playnite.SDK.Models;
@@ -39,11 +40,7 @@ namespace LunaBox.PlayniteExporter
 
         private void ExportLibrary()
         {
-            var initialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
-            var exportPath = PlayniteApi.Dialogs.SaveFile(
-                GetText("LOCLunaBoxExporterFileFilter", "LunaBox JSON|*.json"),
-                true,
-                initialDirectory);
+            var exportPath = SelectExportPath();
             if (string.IsNullOrWhiteSpace(exportPath))
             {
                 return;
@@ -83,6 +80,27 @@ namespace LunaBox.PlayniteExporter
                         exception.Message),
                     GetText("LOCLunaBoxExporterTitle", "LunaBox Exporter"));
             }
+        }
+
+        private string SelectExportPath()
+        {
+            var dialog = new SaveFileDialog
+            {
+                Title = GetText("LOCLunaBoxExporterTitle", "LunaBox Exporter"),
+                Filter = GetText("LOCLunaBoxExporterFileFilter", "LunaBox JSON|*.json"),
+                DefaultExt = ".json",
+                AddExtension = true,
+                OverwritePrompt = true,
+                InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
+                FileName = $"LunaBox_Playnite_Export_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+            };
+
+            var owner = PlayniteApi.Dialogs.GetCurrentAppWindow();
+            var accepted = owner == null
+                ? dialog.ShowDialog()
+                : dialog.ShowDialog(owner);
+
+            return accepted == true ? dialog.FileName : string.Empty;
         }
 
         private LunaBoxExportGame MapGame(Game game, DateTime exportedAt)

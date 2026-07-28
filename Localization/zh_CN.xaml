@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ResourceDictionary
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:sys="clr-namespace:System;assembly=mscorlib">
+    <sys:String x:Key="LOCLunaBoxExporterMenuItem">为 LunaBox 导出游戏库</sys:String>
+    <sys:String x:Key="LOCLunaBoxExporterFileFilter">LunaBox JSON|*.json</sys:String>
+    <sys:String x:Key="LOCLunaBoxExporterTitle">LunaBox 导出器</sys:String>
+    <sys:String x:Key="LOCLunaBoxExporterSuccessMessage" xml:space="preserve">成功导出 {0} 个游戏。
+
+文件：{1}</sys:String>
+    <sys:String x:Key="LOCLunaBoxExporterErrorMessage">导出失败：{0}</sys:String>
+</ResourceDictionary>

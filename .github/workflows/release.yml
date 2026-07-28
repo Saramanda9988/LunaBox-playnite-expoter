@@ -1,0 +1,185 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+  workflow_dispatch:
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  PLAYNITE_VERSION: '10.56'
+  PLAYNITE_ARCHIVE_URL: https://github.com/JosefNemec/Playnite/releases/download/10.56/10.56.7z
+  PLAYNITE_ARCHIVE_SHA256: 402DC4A4B818B1EBBEE4F571F81585BB6BBF8E17F817C1012CDED0B3D1CC565F
+
+jobs:
+  build:
+    name: Build Playnite extension
+    runs-on: windows-2025
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Validate extension version
+        id: version
+        shell: pwsh
+        env:
+          GIT_REF_NAME: ${{ github.ref_name }}
+          GIT_REF_TYPE: ${{ github.ref_type }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Manifest = Get-Content -LiteralPath 'extension.yaml'
+          $VersionLine = $Manifest |
+            Where-Object { $_ -match '^Version:\s*' } |
+            Select-Object -First 1
+
+          if ([string]::IsNullOrWhiteSpace($VersionLine)) {
+            throw 'Version is missing from extension.yaml.'
+          }
+
+          $Version = ($VersionLine -replace '^Version:\s*', '').Trim()
+          if ($Version -notmatch '^\d+\.\d+\.\d+$') {
+            throw "Invalid extension version: $Version"
+          }
+
+          if ($env:GIT_REF_TYPE -eq 'tag') {
+            $ExpectedTag = "v$Version"
+            if ($env:GIT_REF_NAME -ne $ExpectedTag) {
+              throw "Tag and extension version mismatch: expected $ExpectedTag, found $env:GIT_REF_NAME"
+            }
+          }
+
+          "version=$Version" >> $env:GITHUB_OUTPUT
+
+      - name: Download Playnite Toolbox
+        id: toolbox
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $Archive = Join-Path $env:RUNNER_TEMP "playnite-$env:PLAYNITE_VERSION.7z"
+          $ExtractDirectory = Join-Path $env:RUNNER_TEMP "playnite-$env:PLAYNITE_VERSION"
+          Invoke-WebRequest -Uri $env:PLAYNITE_ARCHIVE_URL -OutFile $Archive
+
+          $ActualHash = (Get-FileHash -LiteralPath $Archive -Algorithm SHA256).Hash
+          if ($ActualHash -ne $env:PLAYNITE_ARCHIVE_SHA256) {
+            throw "Playnite archive checksum mismatch: expected $env:PLAYNITE_ARCHIVE_SHA256, found $ActualHash"
+          }
+
+          $SevenZip = Join-Path $env:ProgramFiles '7-Zip/7z.exe'
+          if (!(Test-Path -LiteralPath $SevenZip)) {
+            throw "7-Zip was not found at $SevenZip"
+          }
+
+          & $SevenZip x $Archive "-o$ExtractDirectory" -y
+          if ($LASTEXITCODE -ne 0) {
+            throw "Failed to extract Playnite $env:PLAYNITE_VERSION."
+          }
+
+          $Toolbox = Join-Path $ExtractDirectory 'Toolbox.exe'
+          if (!(Test-Path -LiteralPath $Toolbox)) {
+            throw "Toolbox.exe was not found in Playnite $env:PLAYNITE_VERSION."
+          }
+
+          "path=$Toolbox" >> $env:GITHUB_OUTPUT
+
+      - name: Build and pack extension
+        id: package
+        shell: pwsh
+        env:
+          EXTENSION_VERSION: ${{ steps.version.outputs.version }}
+          TOOLBOX_PATH: ${{ steps.toolbox.outputs.path }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PackageDirectory = Join-Path $env:RUNNER_TEMP 'lunabox-playnite-exporter-package'
+          .\build.ps1 `
+            -Configuration Release `
+            -ToolboxPath $env:TOOLBOX_PATH `
+            -PackageDirectory $PackageDirectory
+
+          $Packages = @(
+            Get-ChildItem -LiteralPath $PackageDirectory -Filter '*.pext' -File
+          )
+          if ($Packages.Count -ne 1) {
+            throw "Expected one .pext package, found $($Packages.Count)."
+          }
+
+          $ExpectedSuffix = "_$($env:EXTENSION_VERSION.Replace('.', '_')).pext"
+          $Package = $Packages[0]
+          if (!$Package.Name.EndsWith($ExpectedSuffix, [StringComparison]::OrdinalIgnoreCase)) {
+            throw "Package version mismatch: $($Package.Name)"
+          }
+
+          "name=$($Package.Name)" >> $env:GITHUB_OUTPUT
+          "path=$($Package.FullName)" >> $env:GITHUB_OUTPUT
+
+      - name: Upload extension package
+        uses: actions/upload-artifact@v4
+        with:
+          name: lunabox-playnite-exporter-${{ steps.version.outputs.version }}
+          path: ${{ steps.package.outputs.path }}
+          if-no-files-found: error
+
+  create-release:
+    name: Create GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      actions: read
+      contents: write
+
+    steps:
+      - name: Download extension package
+        uses: actions/download-artifact@v4
+        with:
+          name: lunabox-playnite-exporter-${{ needs.build.outputs.version }}
+          path: release
+
+      - name: Verify release package
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find release -maxdepth 1 -type f -name '*.pext' | wc -l | tr -d ' ')" -eq 1
+          find release -maxdepth 1 -type f -name '*.pext' -printf '%f\n'
+
+      - name: Generate release notes
+        shell: bash
+        run: |
+          cat <<'EOF' > release_notes.md
+          ## LunaBox Exporter for Playnite ${{ needs.build.outputs.version }}
+
+          此扩展用于将 Playnite 10 游戏库导出为 LunaBox 可导入的 JSON 文件。
+
+          ### 安装
+
+          下载 `.pext` 文件，通过 Playnite 安装并重启 Playnite。
+
+          ### 版本记录
+
+          查看 [本次标签对应的提交](https://github.com/${{ github.repository }}/commits/${{ github.ref_name }})。
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: LunaBox Exporter for Playnite v${{ needs.build.outputs.version }}
+          files: release/*.pext
+          body_path: release_notes.md
+          draft: false
+          prerelease: false
+          generate_release_notes: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

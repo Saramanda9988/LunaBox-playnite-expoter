@@ -14,6 +14,7 @@ namespace LunaBox.PlayniteExporter
     public sealed class LunaBoxExporterPlugin : GenericPlugin
     {
         private static readonly Guid PluginId = Guid.Parse("3F3BC4E7-339D-4B7B-A7F7-F6B0F80D4DC7");
+        private const int ProcessNameTrackingMode = 4;
         private readonly ILogger logger;
 
         public override Guid Id => PluginId;
@@ -174,7 +175,7 @@ namespace LunaBox.PlayniteExporter
 
         private static string ResolveProcessName(Game game, GameAction action)
         {
-            if (action == null || action.TrackingMode != TrackingMode.ProcessName)
+            if (action == null || (int)action.TrackingMode != ProcessNameTrackingMode)
             {
                 return string.Empty;
             }

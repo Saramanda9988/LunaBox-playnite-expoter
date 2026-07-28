@@ -4,6 +4,8 @@
 
 A C# generic plugin for Playnite 10 that exports your Playnite game library as a UTF-8 JSON file supported by LunaBox.
 
+The plugin targets PlayniteSDK 6.4.0, which shipped with the first stable Playnite 10 release. It can therefore be loaded by all released Playnite 10 versions.
+
 ## Exported data
 
 Each exported game can include its name, developers, description, rating, release date, cover, local launch executable, installation directory, tracking process, completion status, tags, and source identifiers. Steam games also include the Steam launch information used by LunaBox.

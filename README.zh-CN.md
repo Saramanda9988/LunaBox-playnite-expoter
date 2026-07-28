@@ -4,6 +4,8 @@
 
 这是一个面向 Playnite 10 的 C# 通用扩展，用于将 Playnite 游戏库导出为 LunaBox 支持的 UTF-8 JSON 文件。
 
+扩展以首个 Playnite 10 稳定版随附的 PlayniteSDK 6.4.0 为兼容基准，可由已经发布的全部 Playnite 10 版本加载。
+
 ## 导出内容
 
 每个游戏可以包含名称、开发商、简介、评分、发售日期、封面、本地启动文件、安装目录、监控进程、完成状态、标签和来源标识。Steam 游戏还会包含 LunaBox 使用的 Steam 启动信息。

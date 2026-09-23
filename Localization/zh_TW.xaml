@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:sys="clr-namespace:System;assembly=mscorlib">
     <sys:String x:Key="LOCLunaBoxExporterMenuItem">為 LunaBox 匯出遊戲庫</sys:String>
-    <sys:String x:Key="LOCLunaBoxExporterFileFilter">LunaBox JSON|*.json</sys:String>
+    <sys:String x:Key="LOCLunaBoxExporterFileFilter">LunaBox ZIP|*.zip</sys:String>
     <sys:String x:Key="LOCLunaBoxExporterTitle">LunaBox 匯出器</sys:String>
     <sys:String x:Key="LOCLunaBoxExporterSuccessMessage" xml:space="preserve">成功匯出 {0} 個遊戲。
 

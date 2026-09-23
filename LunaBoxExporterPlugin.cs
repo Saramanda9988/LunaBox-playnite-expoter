@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Text;
 using Microsoft.Win32;
@@ -47,9 +48,9 @@ namespace LunaBox.PlayniteExporter
                 return;
             }
 
-            if (!string.Equals(System.IO.Path.GetExtension(exportPath), ".json", StringComparison.OrdinalIgnoreCase))
+            if (!string.Equals(System.IO.Path.GetExtension(exportPath), ".zip", StringComparison.OrdinalIgnoreCase))
             {
-                exportPath += ".json";
+                exportPath += ".zip";
             }
 
             try
@@ -61,8 +62,71 @@ namespace LunaBox.PlayniteExporter
                     .OrderBy(game => game.Name, StringComparer.CurrentCultureIgnoreCase)
                     .ToList();
 
-                var json = Serialization.ToJson(games, true);
-                File.WriteAllText(exportPath, json, new UTF8Encoding(false));
+                var tempPath = exportPath + "." + Guid.NewGuid().ToString("N") + ".tmp";
+                try
+                {
+                    using (var file = File.Create(tempPath))
+                    using (var archive = new ZipArchive(file, ZipArchiveMode.Create))
+                    {
+                        foreach (var game in games)
+                        {
+                            if (string.IsNullOrWhiteSpace(game.CoverUrl) || IsHttpUrl(game.CoverUrl))
+                            {
+                                continue;
+                            }
+
+                            var coverPath = game.CoverUrl;
+                            game.CoverUrl = string.Empty;
+                            if (!File.Exists(coverPath))
+                            {
+                                logger.Warn($"Cover image missing for {game.Name}: {coverPath}");
+                                continue;
+                            }
+
+                            var extension = System.IO.Path.GetExtension(coverPath);
+                            if (string.IsNullOrWhiteSpace(extension))
+                            {
+                                extension = ".png";
+                            }
+                            var entryName = $"covers/{game.Id}{extension.ToLowerInvariant()}";
+                            try
+                            {
+                                archive.CreateEntryFromFile(coverPath, entryName, CompressionLevel.Optimal);
+                                game.CoverUrl = entryName;
+                            }
+                            catch (IOException exception)
+                            {
+                                logger.Warn($"Could not include cover image for {game.Name}: {exception.Message}");
+                            }
+                            catch (UnauthorizedAccessException exception)
+                            {
+                                logger.Warn($"Could not include cover image for {game.Name}: {exception.Message}");
+                            }
+                        }
+
+                        var jsonEntry = archive.CreateEntry("games.json", CompressionLevel.Optimal);
+                        using (var writer = new StreamWriter(jsonEntry.Open(), new UTF8Encoding(false)))
+                        {
+                            writer.Write(Serialization.ToJson(games, true));
+                        }
+                    }
+
+                    if (File.Exists(exportPath))
+                    {
+                        File.Replace(tempPath, exportPath, null);
+                    }
+                    else
+                    {
+                        File.Move(tempPath, exportPath);
+                    }
+                }
+                finally
+                {
+                    if (File.Exists(tempPath))
+                    {
+                        File.Delete(tempPath);
+                    }
+                }
 
                 logger.Info($"Exported {games.Count} Playnite games to {exportPath}.");
                 PlayniteApi.Dialogs.ShowMessage(
@@ -88,12 +152,12 @@ namespace LunaBox.PlayniteExporter
             var dialog = new SaveFileDialog
             {
                 Title = GetText("LOCLunaBoxExporterTitle", "LunaBox Exporter"),
-                Filter = GetText("LOCLunaBoxExporterFileFilter", "LunaBox JSON|*.json"),
-                DefaultExt = ".json",
+                Filter = GetText("LOCLunaBoxExporterFileFilter", "LunaBox ZIP|*.zip"),
+                DefaultExt = ".zip",
                 AddExtension = true,
                 OverwritePrompt = true,
                 InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory),
-                FileName = $"LunaBox_Playnite_Export_{DateTime.Now:yyyyMMdd_HHmmss}.json"
+                FileName = $"LunaBox_Playnite_Export_{DateTime.Now:yyyyMMdd_HHmmss}.zip"
             };
 
             var owner = PlayniteApi.Dialogs.GetCurrentAppWindow();

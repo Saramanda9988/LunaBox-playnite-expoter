@@ -13,6 +13,8 @@
     <!-- Playnite 10.1, the first stable Playnite 10 release, ships PlayniteSDK 6.4.0. -->
     <PackageReference Include="PlayniteSDK" Version="6.4.0" PrivateAssets="all" ExcludeAssets="runtime" />
     <Reference Include="PresentationCore" />
+    <Reference Include="System.IO.Compression" />
+    <Reference Include="System.IO.Compression.FileSystem" />
     <Reference Include="PresentationFramework" />
     <Reference Include="WindowsBase" />
   </ItemGroup>
